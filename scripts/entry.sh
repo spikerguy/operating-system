@@ -14,6 +14,8 @@ if [ "${BUILDER_UID:-0}" -ne 0 ] && [ "${BUILDER_GID:-0}" -ne 0 ]; then
   USER="builder"
 fi
 
+chown ${USER} /cache
+
 if CMD="$(command -v "$1")"; then
   shift
   sudo -H -u ${USER} "$CMD" "$@"
