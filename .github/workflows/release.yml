@@ -1,0 +1,61 @@
+# Home Assistant Operating System release build workflow
+
+name: Release build
+
+on:
+  push:
+    branches: [ github-actions ]
+
+env:
+  GHR_VERSION: "v0.13.0"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        board: [ rpi4_64 ]
+    runs-on: [ self-hosted, ubuntu-20.04 ]
+
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.run_number }}
+          release_name: Release ${{ github.run_number }}
+          draft: false
+          prerelease: true
+
+      - name: Install GHR
+        run: |
+          curl -SsL https://github.com/tcnksm/ghr/releases/download/${GHR_VERSION}/ghr_${GHR_VERSION}_linux_amd64.tar.gz | tar xzf -
+          cp ghr_${GHR_VERSION}_linux_amd64/ghr .
+          rm -rf ghr_${GHR_VERSION}_linux_amd64
+          echo ${{ steps.create_release.outputs.upload_url }}
+
+      - name: Build container for Home Assistant OS build
+        run: docker build -t haos-builder .
+
+      - name: Build ${{ matrix.board }}
+        run: |
+          BUILDER_UID="$(id -u)"
+          BUILDER_GID="$(id -g)"
+          docker run --rm --privileged -v "${GITHUB_WORKSPACE}:/build" \
+            -e BUILDER_UID="${BUILDER_UID}" -e BUILDER_GID="${BUILDER_GID}" \
+            -v "haos-build-cache:/cache" \
+            haos-builder make ${{ matrix.board }}
+
+      - name: Upload ${{ matrix.board }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+          asset_path: ./release/hassos_rpi4-64-5.6.img.gz
+          asset_name: hassos_rpi4-64-5.6.img.gz
+          asset_content_type: application/gzip
