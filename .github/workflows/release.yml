@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         board: [ rpi4_64 ]
-    runs-on: [ ubuntu-20.04 ]
+    runs-on: [ ubuntu-latest ]
 
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
