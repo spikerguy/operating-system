@@ -3,59 +3,113 @@
 name: Release build
 
 on:
-  push:
-    branches: [ github-actions ]
-
-env:
-  GHR_VERSION: "v0.13.0"
+  release:
+    types: [published]
 
 jobs:
+  validate_version:
+    name: Validate version number
+    runs-on: [ "ubuntu-20.04" ]
+    outputs:
+      version: ${{ steps.version_check.outputs.version }}
+    steps:
+      - name: Validate version
+        id: version_check
+        run: |
+          major=$(cat ${GITHUB_WORKSPACE}/buildroot-external/meta | grep VERSION_MAJOR | cut -d'=' -f2)
+          build=$(cat ${GITHUB_WORKSPACE}/buildroot-external/meta | grep VERSION_BUILD | cut -d'=' -f2)
+          if [ "${major}.${build}" != "${{ github.event.release.tag_name }}" ]; then
+            echo "Version number in Buildroot metadata is does not match tag (${major}.${build} vs ${{ github.event.release.tag_name }})."
+            exit 1
+          fi
+          echo "::set-output name=version::$major.$build"
+
   build:
+    name: Release build for ${{ matrix.board.name }}
+    needs: validate_version
     strategy:
       matrix:
-        board: [ rpi4_64 ]
-    runs-on: [ ubuntu-latest ]
+        board:
+          - {"name": "rpi4_64", "outputs": "rpi4-64"}
+          - {"name": "ova", "outputs": "rpi4-64"}
+    runs-on: [ "self-hosted", "ubuntu-20.04" ]
 
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.run_number }}
-          release_name: Release ${{ github.run_number }}
-          draft: false
-          prerelease: true
-
-      - name: Install GHR
-        run: |
-          curl -SsL https://github.com/tcnksm/ghr/releases/download/${GHR_VERSION}/ghr_${GHR_VERSION}_linux_amd64.tar.gz | tar xzf -
-          cp ghr_${GHR_VERSION}_linux_amd64/ghr .
-          rm -rf ghr_${GHR_VERSION}_linux_amd64
-          echo ${{ steps.create_release.outputs.upload_url }}
-
-      - name: Build container for Home Assistant OS build
+      - name: Build container
         run: docker build -t haos-builder .
 
-      - name: Build ${{ matrix.board }}
+      - name: Build
         run: |
           BUILDER_UID="$(id -u)"
           BUILDER_GID="$(id -g)"
           docker run --rm --privileged -v "${GITHUB_WORKSPACE}:/build" \
             -e BUILDER_UID="${BUILDER_UID}" -e BUILDER_GID="${BUILDER_GID}" \
             -v "haos-build-cache:/cache" \
-            haos-builder make ${{ matrix.board }}
+            haos-builder make ${{ matrix.board.name }}
 
-      - name: Upload ${{ matrix.board }}
+      - name: Upload disk image
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./release/hassos_rpi4-64-5.6.img.gz
-          asset_name: hassos_rpi4-64-5.6.img.gz
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${GITHUB_WORKSPACE}/release/hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.img.gz
+          asset_name: hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.img.gz
+          asset_content_type: application/gzip
+
+      - name: Upload rauc update
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${GITHUB_WORKSPACE}/release/hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.raucb
+          asset_name: hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.raucb
+          asset_content_type: application/octet-stream
+
+      - name: Upload qcow2 image
+        if: ${{ matrix.board.name == 'ova' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${GITHUB_WORKSPACE}/release/hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.qcow2.gz
+          asset_name: hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.qcow2.gz
+          asset_content_type: application/gzip
+
+      - name: Upload vdi image
+        if: ${{ matrix.board.name == 'ova' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${GITHUB_WORKSPACE}/release/hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.vdi.gz
+          asset_name: hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.vdi.gz
+          asset_content_type: application/gzip
+
+      - name: Upload vhdx image
+        if: ${{ matrix.board.name == 'ova' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${GITHUB_WORKSPACE}/release/hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.vhdx.gz
+          asset_name: hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.vhdx.gz
+          asset_content_type: application/gzip
+
+      - name: Upload vmdk image
+        if: ${{ matrix.board.name == 'ova' }}
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${GITHUB_WORKSPACE}/release/hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.vmdk.gz
+          asset_name: hassos_${{ matrix.board.output }}-${{ needs.version_check.outputs.version }}.vmdk.gz
           asset_content_type: application/gzip
