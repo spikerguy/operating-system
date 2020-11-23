@@ -1,8 +1,9 @@
-# Home Assistant Operating System release build workflow
+# Home Assistant Operating System build workflow
 
-name: Release build
+name: Build Operating System
 
 on:
+  workflow_dispatch:
   release:
     types: [published]
 
