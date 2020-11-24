@@ -32,7 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ncurses-dev \
         patch \
         perl \
-        python \
+        python3 \
         rsync \
         sudo \
         unzip \
@@ -40,7 +40,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         qemu-utils \
         openssh-client \
         vim \
+        graphviz \
+        python3-matplotlib \
     && rm -rf /var/lib/apt/lists/*
+
+# Convince Debian that this is the way...
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.7 1
 
 # Init entry
 COPY scripts/entry.sh /usr/sbin/
