@@ -1,0 +1,19 @@
+config BR2_PACKAGE_KHADAS_BOOT
+	bool "Khadas Amlogic Secure Boot Loader"
+	depends on BR2_TARGET_UBOOT
+	help
+	  Add secure boot loader to U-Boot for Khadas Amlogic targets.
+
+if BR2_PACKAGE_KHADAS_BOOT
+choice
+	prompt "Target"
+	default BR2_PACKAGE_KHADAS_BOOT_VIM1
+
+config BR2_PACKAGE_KHADAS_BOOT_VIM1
+	bool "VIM1"
+	help
+	  For Khadas VIM1
+
+endchoice
+
+endif
