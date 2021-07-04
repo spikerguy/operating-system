@@ -68,7 +68,7 @@ define KHADAS_BOOT_BUILD_CMDS
 		--bl2 fip/bl2.n.bin.sig \
 		--bl30 fip/bl30_new.bin.enc \
 		--bl31 fip/bl31.img.enc \
-		--bl33 fip/bl3
+		--bl33 fip/bl33.bin.enc
 
 	cp -f fip/u-boot.bin.sd.bin  $(@D)/u-boot.gxl
 endef
