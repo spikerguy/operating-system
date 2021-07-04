@@ -35,7 +35,7 @@ fi
 fileenv mmc ${devnum}:1 ${ramdisk_addr_r} cmdline.txt cmdline
 
 # Load device tree
-setenv fdtfile "meson-gxbb-odroidc2.dtb"
+setenv fdtfile "meson-gxl-s905x-khadas-vim.dtb"
 echo "Loading standard device tree ${fdtfile}"
 fatload mmc ${devnum}:1 ${fdt_addr_r} ${fdtfile}
 fdt addr ${fdt_addr_r}
