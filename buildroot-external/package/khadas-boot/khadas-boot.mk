@@ -23,6 +23,7 @@ define KHADAS_BOOT_BUILD_CMDS
 	# Implement signing u-boot.bin similar to how its done in
 	# https://github.com/spikerguy/khadas-uboot/blob/master/packages/u-boot-mainline/package.mk
 	#cp -r $(BUILD_DIR)/uboot-2021.04/fip $(@D)
+	cd $(@D)
 	mkdir -p fip
 
 	cp $(KHADAS_BOOT_FIP_DIR)/bl2.bin fip/
