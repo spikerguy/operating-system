@@ -4,23 +4,38 @@ name: Development build
 
 on:
   workflow_dispatch:
+  pull_request:
+    types: [opened,synchronize,labeled]
 
 jobs:
   version:
-
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-dev-build') }}
     name: Generate version
     runs-on: [ "ubuntu-20.04" ]
     outputs:
       version_main: ${{ steps.version_main.outputs.version_main }}
-      version_dev: ${{ steps.version_dev.outputs.version_dev }}
+      version_dev: ${{ steps.version_dev.outputs.version_dev }}${{ steps.version_pr.outputs.version_pr }}
     steps:
-      - name: Generate Development build version
+      - name: debug
+        run: |
+          echo "${{ toJson(github.event.pull_request) }}"
+          echo "${{ toJson(github.event.pull_request.labels.*.names) }}"
+      - name: Generate Development build version for full dev build
         shell: bash
         id: version_dev
         run: |
           version_dev="dev$(date --utc +'%Y%m%d')"
           echo "Development version \"${version_dev}\""
           echo "::set-output name=version_dev::${version_dev}"
+      - name: Generate Development build version for PR
+        if: ${{ github.event.pull_request }}
+        shell: bash
+        id: version_pr
+        run: |
+          version_pr="+${{ github.event.pull_request.number }}"
+          echo "PR \"${version_pr}\""
+          echo "Issue comment ${{ github.event.issue_comment.comment }}"
+          echo "::set-output name=version_pr::${version_pr}"
       - uses: actions/checkout@v2
       - name: Get Major/Minor version
         id: version_main
@@ -30,6 +45,7 @@ jobs:
           echo "::set-output name=version_main::${major}.${build}"
 
   build:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-dev-build') }}
     name: Release build for ${{ matrix.board.name }}
     needs: version
     strategy:
@@ -54,14 +70,18 @@ jobs:
 
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - name: Checkout source
+        uses: actions/checkout@v2
+        if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, matrix.board.name) }}
         with:
           submodules: true
 
       - name: Build container
+        if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, matrix.board.name) }}
         run: docker build -t haos-builder .
 
       - name: 'Add release PKI certs'
+        if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, matrix.board.name) }}
         env:
           RAUC_CERTIFICATE: ${{ secrets.RAUC_CERTIFICATE }}
           RAUC_PRIVATE_KEY: ${{ secrets.RAUC_PRIVATE_KEY }}
@@ -70,6 +90,7 @@ jobs:
           echo -e "-----BEGIN PRIVATE KEY-----\n${RAUC_PRIVATE_KEY}\n-----END PRIVATE KEY-----" > key.pem
 
       - name: Build
+        if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, matrix.board.name) }}
         run: |
           BUILDER_UID="$(id -u)"
           BUILDER_GID="$(id -g)"
@@ -79,6 +100,7 @@ jobs:
             haos-builder make BUILDDIR=/build VERSION_DEV=${{ needs.version.outputs.version_dev }} ${{ matrix.board.name }}
 
       - name: Upload images
+        if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, matrix.board.name) }}
         uses: burnett01/rsync-deployments@4.1
         with:
           rsh: -q
@@ -91,7 +113,8 @@ jobs:
           remote_key: ${{ secrets.DEV_SSH_KEY }}
 
   bump_version:
-    name: Bump dev version to ${{ needs.version.outputs.version_main }}.${{ needs.version.outputs.version_dev }}
+    name: Bump dev channel version
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: [ build, version ]
     runs-on: [ "ubuntu-20.04" ]
 
@@ -103,7 +126,7 @@ jobs:
         email: ${{ secrets.GIT_EMAIL }}
         token: ${{ secrets.GIT_TOKEN }}
 
-    - name: Bump Home Assistant OS dev version
+    - name: Bump Home Assistant OS dev channel version to ${{ needs.version.outputs.version_main }}.${{ needs.version.outputs.version_dev }}
       uses: home-assistant/actions/helpers/version-push@master
       with:
         key: "hassos[]"
